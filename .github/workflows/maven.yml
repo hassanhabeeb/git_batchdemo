@@ -8,20 +8,25 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
+      # Step 1: Checkout the code
       - name: Checkout code
         uses: actions/checkout@v4
-        
+
+      # Step 2: Set up JDK 11
       - name: Set up JDK 11
-        uses: actions/setup-java@v1
+        uses: actions/setup-java@v2
         with:
+          distribution: 'adopt'
           java-version: 11
 
+      # Step 3: Build the project with Maven
       - name: Build with Maven
         run: mvn clean package
 
-      - name: Upload  WAR file
+      # Step 4: Upload the built WAR file as an artifact
+      - name: Upload WAR file
         uses: actions/upload-artifact@v3
         with:
           name: java-app
@@ -30,14 +35,16 @@ jobs:
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    
+
     steps:
+      # Step 5: Download the WAR artifact from the build job
       - name: Download WAR file
         uses: actions/download-artifact@v3
         with:
           name: java-app
           path: target
-          
+
+      # Step 6: Set up SSH and deploy the WAR file via SCP
       - name: Deploy WAR via SCP
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
@@ -46,11 +53,25 @@ jobs:
           mkdir -p ~/.ssh
           echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
+
+          # Validate the hostname
+          if [ -z "$HOSTNAME" ]; then
+            echo "Error: HOSTNAME is not set."
+            exit 1
+          fi
+
           ssh-keyscan -H $HOSTNAME >> ~/.ssh/known_hosts
-          scp -i ~/.ssh/id_ed25519 target/*.war ubuntu@${{ secrets.SSH_HOST }}:/home/ubuntu/
-      - name: Copy WAR file to Tomcat webapps
+
+          # Deploy the WAR file to the server
+          scp -i ~/.ssh/id_ed25519 target/*.war ubuntu@$HOSTNAME:/home/ubuntu/
+
+      # Step 7: Copy WAR file to Tomcat's webapps directory and restart Tomcat
+      - name: Copy WAR file to Tomcat webapps and restart
         env:
           SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
           HOSTNAME: ${{ secrets.SSH_HOST }}
         run: |
-          ssh -i ~/.ssh/id_ed25519 ubuntu@${{ secrets.SSH_HOST }} 'sudo cp /home/ubuntu/*.war /var/lib/tomcat9/webapps/'
+          ssh -i ~/.ssh/id_ed25519 ubuntu@$HOSTNAME << 'EOF'
+          sudo cp /home/ubuntu/*.war /var/lib/tomcat10/webapps/
+          sudo systemctl restart tomcat10
+          EOF
