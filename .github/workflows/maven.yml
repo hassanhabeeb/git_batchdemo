@@ -72,6 +72,6 @@ jobs:
           HOSTNAME: ${{ secrets.SSH_HOST }}
         run: |
           ssh -i ~/.ssh/id_ed25519 ubuntu@$HOSTNAME << 'EOF'
-          sudo cp /home/ubuntu/*.war /var/lib/tomcat10/webapps/
+          sudo cp /home/ubuntu/*.war /opt/tomcat/webapps/
           sudo systemctl restart tomcat10
           EOF
